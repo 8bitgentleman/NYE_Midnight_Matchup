@@ -267,6 +267,55 @@ function isTouchDevice() {
     return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 }
 
+// Consolidate nearby times on mobile
+function consolidateTimes(moviesByTime, isMobile) {
+    if (!isMobile) return moviesByTime;
+
+    // Convert to array and sort by time
+    const timeEntries = Array.from(moviesByTime.entries())
+        .map(([time, movies]) => ({
+            time,
+            minutes: timeToMinutes(time),
+            movies
+        }))
+        .sort((a, b) => a.minutes - b.minutes);
+
+    // Group times within 5 minutes of each other
+    const consolidated = new Map();
+    const threshold = 5; // minutes
+
+    timeEntries.forEach(entry => {
+        let merged = false;
+
+        // Check if this time can be merged with an existing consolidated group
+        for (let [consolidatedTime, data] of consolidated.entries()) {
+            const timeDiff = Math.abs(entry.minutes - data.minutes);
+            if (timeDiff <= threshold) {
+                // Merge into this group
+                data.movies.push(...entry.movies);
+                merged = true;
+                break;
+            }
+        }
+
+        if (!merged) {
+            // Create new group
+            consolidated.set(entry.time, {
+                minutes: entry.minutes,
+                movies: [...entry.movies]
+            });
+        }
+    });
+
+    // Convert back to simple Map structure
+    const result = new Map();
+    consolidated.forEach((data, time) => {
+        result.set(time, data.movies);
+    });
+
+    return result;
+}
+
 // Render interactive timeline
 function renderInteractiveTimeline() {
     const markersContainer = document.getElementById('timelineMarkers');
@@ -280,7 +329,7 @@ function renderInteractiveTimeline() {
     const range = endMinutes - startMinutes; // 180 minutes
 
     // Group movies by start time
-    const moviesByTime = new Map();
+    let moviesByTime = new Map();
     filteredMovies.forEach(movie => {
         const time = movie['Start Time'];
         if (!moviesByTime.has(time)) {
@@ -288,6 +337,10 @@ function renderInteractiveTimeline() {
         }
         moviesByTime.get(time).push(movie);
     });
+
+    // Consolidate nearby times on mobile
+    const isMobile = window.innerWidth <= 768;
+    moviesByTime = consolidateTimes(moviesByTime, isMobile);
 
     // Create markers
     markersContainer.innerHTML = '';
@@ -391,6 +444,7 @@ function renderInteractiveTimeline() {
 // Show tooltip for timeline marker
 function showTooltip(movies, time, marker) {
     const tooltip = document.getElementById('timelineTooltip');
+    const isMobile = window.innerWidth <= 768;
 
     if (movies.length === 1) {
         const movie = movies[0];
@@ -398,18 +452,28 @@ function showTooltip(movies, time, marker) {
 
         tooltip.innerHTML = `
             <div class="timeline-tooltip-title">${movie.Title} (${movie.Year})</div>
-            <div class="timeline-tooltip-time">Start at ${time} PM</div>
+            <div class="timeline-tooltip-time">Start at ${movie['Start Time']}</div>
             <div class="timeline-tooltip-scene">${movie['Midnight Scene']}</div>
             <div class="timeline-tooltip-tags">
                 ${tags.map(tag => `<span class="timeline-tooltip-tag">${tag}</span>`).join('')}
             </div>
         `;
     } else {
+        // Get time range if consolidated on mobile
+        const startTimes = [...new Set(movies.map(m => m['Start Time']))].sort();
+        const timeDisplay = isMobile && startTimes.length > 1
+            ? `Around ${time}`
+            : `Start at ${time}`;
+
+        // Show first 3 movies, then indicate more
+        const movieList = movies.slice(0, 3).map(m => `• ${m.Title} (${m.Year})`).join('<br>');
+        const moreText = movies.length > 3 ? `<br><em>+${movies.length - 3} more</em>` : '';
+
         tooltip.innerHTML = `
             <div class="timeline-tooltip-title">${movies.length} Movies</div>
-            <div class="timeline-tooltip-time">Start at ${time} PM</div>
+            <div class="timeline-tooltip-time">${timeDisplay}</div>
             <div class="timeline-tooltip-scene">
-                ${movies.map(m => `• ${m.Title}`).join('<br>')}
+                ${movieList}${moreText}
             </div>
         `;
     }
@@ -421,12 +485,51 @@ function showTooltip(movies, time, marker) {
     const markerRect = marker.getBoundingClientRect();
     const tooltipHeight = tooltip.offsetHeight;
 
-    // Position tooltip above the marker using fixed positioning
-    const left = markerRect.left + (markerRect.width / 2);
-    const top = markerRect.top - tooltipHeight - 20; // Position above marker with 20px gap
+    if (isMobile) {
+        // On mobile, position tooltip below the timeline track
+        const track = document.getElementById('timelineTrack');
+        const container = document.getElementById('timelineViz');
+        const trackRect = track.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
 
-    tooltip.style.left = `${left}px`;
-    tooltip.style.top = `${top}px`;
+        // Calculate position relative to the container
+        const relativeTop = trackRect.bottom - containerRect.top + 10;
+
+        tooltip.style.position = 'absolute';
+        tooltip.style.top = `${relativeTop}px`;
+        tooltip.style.left = '1rem';
+        tooltip.style.right = '1rem';
+    } else {
+        // Desktop: position above the marker using fixed positioning
+        tooltip.style.position = 'fixed';
+        const tooltipWidth = tooltip.offsetWidth;
+        let left = markerRect.left + (markerRect.width / 2);
+        let top = markerRect.top - tooltipHeight - 20;
+
+        // Viewport boundary detection
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+
+        // Check if tooltip goes off left edge
+        if (left - (tooltipWidth / 2) < 10) {
+            left = (tooltipWidth / 2) + 10;
+        }
+
+        // Check if tooltip goes off right edge
+        if (left + (tooltipWidth / 2) > viewportWidth - 10) {
+            left = viewportWidth - (tooltipWidth / 2) - 10;
+        }
+
+        // Check if tooltip goes off top edge (position below instead)
+        if (top < 10) {
+            top = markerRect.bottom + 20;
+            // Update arrow direction in this case would require CSS class toggle
+        }
+
+        tooltip.style.left = `${left}px`;
+        tooltip.style.top = `${top}px`;
+    }
+
     tooltip.style.visibility = 'visible';
     tooltip.classList.add('visible');
 }

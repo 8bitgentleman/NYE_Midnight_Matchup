@@ -87,6 +87,7 @@ body {
 
 /* Interactive Timeline Visualization */
 .timeline-viz {
+    position: relative;
     margin: 3rem auto 4rem;
     padding: 2rem;
     background: linear-gradient(135deg, rgba(212, 175, 55, 0.08) 0%, rgba(212, 175, 55, 0.02) 100%);
@@ -123,6 +124,8 @@ body {
 .timeline-viz-container {
     position: relative;
     padding: 2rem 0;
+    /* Ensure tooltip is positioned relative to this container on mobile */
+    min-height: 140px;
 }
 
 .timeline-viz-track {
@@ -167,16 +170,16 @@ body {
 
 .timeline-marker {
     position: absolute;
-    width: 3px;
-    height: 30px;
-    top: 25px;
+    width: 10px;
+    height: 10px;
+    top: 40px;
     background: var(--champagne);
     cursor: pointer;
     transition: all 0.3s ease;
-    border-radius: 2px;
-    /* Add larger touch target for mobile */
-    padding: 10px;
-    margin: -10px;
+    border-radius: 50%;
+    border: 2px solid var(--midnight);
+    box-shadow: 0 0 0 1px var(--champagne);
+    transform: translate(-50%, -50%);
 }
 
 .timeline-marker::before {
@@ -185,13 +188,13 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 12px;
-    height: 12px;
-    background: var(--gold);
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: 2px solid var(--gold);
     border-radius: 50%;
     opacity: 0;
     transition: all 0.3s ease;
-    box-shadow: 0 0 0 4px var(--midnight), 0 0 12px var(--gold);
 }
 
 .timeline-marker::after {
@@ -208,10 +211,10 @@ body {
 
 .timeline-marker:hover,
 .timeline-marker.active {
-    height: 40px;
-    top: 20px;
     background: var(--gold);
-    box-shadow: 0 0 15px rgba(212, 175, 55, 0.5);
+    box-shadow: 0 0 0 2px var(--midnight), 0 0 0 4px var(--gold), 0 0 20px rgba(212, 175, 55, 0.5);
+    width: 14px;
+    height: 14px;
 }
 
 .timeline-marker:hover::before,
@@ -220,8 +223,15 @@ body {
 }
 
 .timeline-marker.multiple {
-    background: linear-gradient(180deg, var(--gold), var(--soft-gold));
-    width: 5px;
+    background: linear-gradient(135deg, var(--gold), var(--soft-gold));
+    box-shadow: 0 0 0 2px var(--midnight), 0 0 0 3px var(--soft-gold);
+    width: 14px;
+    height: 14px;
+}
+
+.timeline-marker.multiple::after {
+    width: 50px;
+    height: 50px;
 }
 
 .timeline-current-time {
@@ -790,40 +800,83 @@ footer a:hover {
         font-size: 1.25rem;
     }
 
+    .timeline-viz {
+        /* Reserve space below timeline for mobile tooltips */
+        padding-bottom: 3rem;
+    }
+
+    .timeline-viz-container {
+        /* Make timeline scrollable on mobile */
+        overflow-x: auto;
+        overflow-y: visible;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 1rem;
+        margin: 0 -1rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
     .timeline-viz-track {
         height: 100px;
         /* Make it easier to interact with on touch */
         padding: 10px 0;
+        /* Expand width for scrolling - 2x width gives more space */
+        min-width: 200%;
+    }
+
+    .timeline-viz-line {
+        /* Extend line for scrollable area */
+        min-width: 100%;
     }
 
     .timeline-marker {
-        /* Bigger markers on mobile for easier tapping */
-        width: 4px;
-        height: 35px;
-        top: 23px;
+        /* Smaller dots on mobile to prevent overlap */
+        width: 12px;
+        height: 12px;
+        top: 40px;
+        box-shadow: 0 0 0 2px var(--midnight), 0 0 0 3px var(--champagne);
     }
 
     .timeline-marker.multiple {
-        width: 6px;
+        width: 16px;
+        height: 16px;
+        box-shadow: 0 0 0 2px var(--midnight), 0 0 0 4px var(--soft-gold), 0 0 12px rgba(212, 175, 55, 0.3);
     }
 
-    .timeline-marker.active::before {
+    .timeline-marker.active {
         width: 16px;
         height: 16px;
     }
 
+    .timeline-marker.active::before {
+        width: 28px;
+        height: 28px;
+    }
+
     .timeline-tooltip {
-        min-width: calc(100vw - 3rem);
-        max-width: calc(100vw - 3rem);
-        left: 50% !important;
-        transform: translateX(-50%) translateY(0) !important;
-        /* Position tooltip better on mobile */
-        position: fixed !important;
-        bottom: auto;
+        min-width: calc(100vw - 2rem);
+        max-width: calc(100vw - 2rem);
+        /* Position below timeline on mobile */
+        position: absolute !important;
+        left: 1rem !important;
+        right: 1rem !important;
+        top: auto !important;
+        bottom: auto !important;
+        transform: translateY(-10px) !important;
+        margin: 0 auto;
+        transition: opacity 0.3s ease, transform 0.3s ease;
     }
 
     .timeline-tooltip.visible {
-        transform: translateX(-50%) translateY(0) !important;
+        transform: translateY(0) !important;
+    }
+
+    .timeline-tooltip::after {
+        /* Flip arrow to point up on mobile */
+        top: auto;
+        bottom: 100%;
+        border-top-color: transparent;
+        border-bottom-color: var(--gold);
     }
 
     .timeline-label {
@@ -832,13 +885,34 @@ footer a:hover {
 
     /* Add instruction hint for mobile users */
     .timeline-viz::after {
-        content: 'Tap markers to see details';
+        content: '← Swipe to explore • Tap markers for details →';
         display: block;
         text-align: center;
-        font-size: 0.75rem;
-        color: var(--muted-text);
-        margin-top: 1rem;
+        font-size: 0.8rem;
+        color: var(--soft-gold);
+        margin-top: 0.5rem;
+        padding-top: 1rem;
         font-style: italic;
+        opacity: 0.8;
+    }
+
+    /* Scrollbar styling for mobile timeline */
+    .timeline-viz-container::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    .timeline-viz-container::-webkit-scrollbar-track {
+        background: rgba(212, 175, 55, 0.1);
+        border-radius: 2px;
+    }
+
+    .timeline-viz-container::-webkit-scrollbar-thumb {
+        background: var(--soft-gold);
+        border-radius: 2px;
+    }
+
+    .timeline-viz-container::-webkit-scrollbar-thumb:hover {
+        background: var(--gold);
     }
 }
 
